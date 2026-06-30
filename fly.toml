@@ -1,0 +1,23 @@
+# fly.toml app configuration file
+#
+# See https://fly.io/docs/reference/configuration/ for information about all toml properties.
+
+app = "aetheria-books"
+primary_region = "iad"
+
+[http_service]
+  internal_port = 5000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[env]
+  NODE_ENV = "production"
+  PORT = "5000"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
