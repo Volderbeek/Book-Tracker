@@ -2,7 +2,7 @@
 #
 # See https://fly.io/docs/reference/configuration/ for information about all toml properties.
 
-app = "aetheria-books"
+app = "ohara-library"
 primary_region = "iad"
 
 [http_service]

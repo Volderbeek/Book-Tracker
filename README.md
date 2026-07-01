@@ -11,11 +11,11 @@ Designed for high visual fidelity with fluid layouts, dark/light mode toggles, a
 C:\Users\Volde\Book Tracker
 ├── client/                     # Vite + React (TypeScript) frontend
 │   ├── src/
-│   │   ├── components/
-│   │   │   ├── AuthModal.tsx   # Login/Register + OAuth stubs modal
-│   │   │   ├── DbOfflineModal.tsx # Apologetic database outage modal
-│   │   │   ├── Header.tsx      # Header with user profile and status badges
-│   │   │   └── ...
+│   │   ├── components/         # Reusable UI components (e.g. BookCard.tsx)
+│   │   ├── utils/              # Helper utilities and business logic
+│   │   ├── tests/              # Frontend Jest and React Testing Library tests
+│   │   │   ├── components/     # Component unit tests (e.g. BookCard.test.tsx)
+│   │   │   └── utils/          # Utility unit tests (e.g. helpers.test.ts)
 │   │   ├── App.tsx             # Main dashboard controller with offline sync logic
 │   │   ├── App.css             # Component-specific styles (Vanilla CSS)
 │   │   ├── index.css           # Global typography & style tokens
@@ -83,6 +83,16 @@ npm run dev
 ```
 - **React Frontend**: [http://localhost:5173](http://localhost:5173) (automatically proxies `/api` calls to Express)
 - **Express API**: [http://localhost:5000](http://localhost:5000)
+
+### 4. Running Tests
+Run the frontend Jest and React Testing Library tests:
+```bash
+npm test --prefix client
+```
+or navigate into the `client` directory and run:
+```bash
+npm test
+```
 
 ---
 
