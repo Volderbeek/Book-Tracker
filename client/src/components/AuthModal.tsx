@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Mail, Lock, AlertCircle, Loader } from 'lucide-react';
 import type { User } from '../types';
 
@@ -17,7 +17,6 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess, addToast }: AuthModa
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,35 +67,85 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess, addToast }: AuthModa
     }
   };
 
-  const handleOAuth = async (provider: 'google' | 'apple') => {
+  const [googleClientId, setGoogleClientId] = useState<string>('');
+
+  useEffect(() => {
+    // Fetch public OAuth configurations
+    fetch('/api/auth/config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.googleClientId) {
+          setGoogleClientId(data.googleClientId);
+        }
+      })
+      .catch((err) => console.error('Failed to load Google OAuth configuration:', err));
+  }, []);
+
+  const handleCredentialResponse = async (response: any) => {
     setError('');
     setLoading(true);
     try {
-      const response = await fetch('/api/auth/oauth', {
+      const res = await fetch('/api/auth/oauth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider }),
+        body: JSON.stringify({ provider: 'google', token: response.credential }),
       });
 
-      const data = await response.json();
+      const data = await res.json();
 
-      if (!response.ok) {
-        throw new Error(data.message || 'OAuth authentication failed');
+      if (!res.ok) {
+        throw new Error(data.message || 'Google OAuth failed');
       }
 
       onAuthSuccess(data.token, data.user);
-      addToast(`Connected with ${provider.charAt(0).toUpperCase() + provider.slice(1)}! (Demo mode)`, 'success');
+      addToast('Successfully signed in with Google!', 'success');
       onClose();
     } catch (err: any) {
       if (err.message && err.message.includes('Failed to fetch')) {
         setError('Could not reach the server database. Please verify your connection.');
       } else {
-        setError(err.message || 'Something went wrong with social login.');
+        setError(err.message || 'Something went wrong with Google Sign-In.');
       }
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (!isOpen || !googleClientId) return;
+
+    const checkAndInitGoogle = () => {
+      const google = (window as any).google;
+      if (google && google.accounts && google.accounts.id) {
+        try {
+          google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: handleCredentialResponse,
+            auto_select: false,
+          });
+
+          const buttonElement = document.getElementById('google-signin-button');
+          if (buttonElement) {
+            google.accounts.id.renderButton(buttonElement, {
+              theme: 'outline',
+              size: 'large',
+              width: 392,
+              text: 'signin_with',
+              shape: 'rectangular',
+            });
+          }
+        } catch (err) {
+          console.error('Error rendering Google button:', err);
+        }
+      } else {
+        setTimeout(checkAndInitGoogle, 100);
+      }
+    };
+
+    checkAndInitGoogle();
+  }, [isOpen, googleClientId]);
+
+  if (!isOpen) return null;
 
   return (
     <div className="modal-overlay">
@@ -232,70 +281,17 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess, addToast }: AuthModa
           <div style={{ flex: 1, height: '1px', background: 'rgba(255,255,255,0.1)' }}></div>
         </div>
 
-        {/* OAuth Buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {/* Google Button */}
-          <button
-            type="button"
-            onClick={() => handleOAuth('google')}
-            disabled={loading}
-            style={{
+        {/* Google OAuth Button Container */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
+          <div 
+            id="google-signin-button" 
+            style={{ 
+              width: '100%', 
+              minHeight: '44px',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              width: '100%',
-              padding: '10px',
-              background: '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              color: '#111',
-              fontWeight: 500,
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'opacity 0.2s'
+              justifyContent: 'center'
             }}
-            onMouseOver={(e) => (e.currentTarget.style.opacity = '0.9')}
-            onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18">
-              <path fill="#4285F4" d="M17.64 9.2c0-.63-.06-1.25-.16-1.84H9v3.47h4.84c-.21 1.12-.84 2.07-1.79 2.7v2.24h2.9c1.69-1.55 2.69-3.85 2.69-6.57z"/>
-              <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.23l-2.9-2.24c-.8.54-1.84.87-3.06.87-2.35 0-4.34-1.58-5.05-3.71H.95v2.3A9 9 0 0 0 9 18z"/>
-              <path fill="#FBBC05" d="M3.95 10.7a5.4 5.4 0 0 1 0-3.4V5H.95a9 9 0 0 0 0 8l3-2.3z"/>
-              <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35L15 2A9 9 0 0 0 .95 5l3 2.3C4.66 5.17 6.65 3.58 9 3.58z"/>
-            </svg>
-            Continue with Google
-          </button>
-
-          {/* Apple Button */}
-          <button
-            type="button"
-            onClick={() => handleOAuth('apple')}
-            disabled={loading}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '10px',
-              width: '100%',
-              padding: '10px',
-              background: '#000',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              borderRadius: '8px',
-              color: '#fff',
-              fontWeight: 500,
-              fontSize: '14px',
-              cursor: 'pointer',
-              transition: 'opacity 0.2s'
-            }}
-            onMouseOver={(e) => (e.currentTarget.style.opacity = '0.9')}
-            onMouseOut={(e) => (e.currentTarget.style.opacity = '1')}
-          >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="#fff">
-              <path d="M15.56 9.47c-.03-2.18 1.8-3.22 1.88-3.27-1.02-1.49-2.6-1.69-3.16-1.74-1.34-.14-2.62.79-3.3.79-.68 0-1.74-.77-2.86-.75-1.47.02-2.83.86-3.59 2.17-1.53 2.66-.39 6.6 1.09 8.74.72 1.05 1.58 2.22 2.72 2.18 1.1-.04 1.52-.71 2.78-.71 1.25 0 1.64.71 2.78.69 1.16-.02 1.91-1.05 2.62-2.1.83-1.21 1.17-2.39 1.19-2.45-.03-.01-2.28-.87-2.3-3.49zM12.98 2.82c.6-1.12 1.4-1.89 1.37-3.38-1.27.05-2.81.85-3.72 1.91-.81.94-1.52 1.73-1.33 3.22 1.41.11 2.85-.71 3.68-1.75z"/>
-            </svg>
-            Continue with Apple
-          </button>
+          ></div>
         </div>
       </div>
     </div>

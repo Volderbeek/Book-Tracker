@@ -7,6 +7,13 @@ import { checkDbConnection } from '../middleware/auth.js';
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecretkeyforlocaldevchangeitlater';
 
+// Public configurations
+router.get('/config', (req, res) => {
+  res.json({
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  });
+});
+
 // Apply database check to all auth endpoints
 router.use(checkDbConnection);
 
@@ -99,42 +106,69 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Mock OAuth Endpoint for Google & Apple Login
+// OAuth Endpoint for Google Login
 router.post('/oauth', async (req, res) => {
   try {
-    const { provider, email, name } = req.body;
+    const { provider, token } = req.body;
 
-    if (!provider || !['google', 'apple'].includes(provider)) {
-      return res.status(400).json({ message: 'Valid OAuth provider (google or apple) is required' });
+    if (!provider || provider !== 'google') {
+      return res.status(400).json({ message: 'Only Google OAuth is supported' });
     }
 
-    // Default mock credentials if not provided
-    const mockEmail = email 
-      ? email.toLowerCase().trim() 
-      : `${provider}-demo@aetheriabooks.com`;
+    if (!token) {
+      return res.status(400).json({ message: 'OAuth credential/token is required' });
+    }
+
+    // Verify Google ID Token
+    const verifyResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${token}`);
+    if (!verifyResponse.ok) {
+      const errorData = await verifyResponse.json().catch(() => ({}));
+      return res.status(401).json({ 
+        message: errorData.error_description || 'Invalid or expired Google OAuth token' 
+      });
+    }
+
+    const payload = await verifyResponse.json();
+
+    // Verify Audience to prevent client-side token spoofing
+    const googleClientId = process.env.GOOGLE_CLIENT_ID;
+    if (!googleClientId) {
+      return res.status(500).json({ message: 'Google Client ID is not configured on the server' });
+    }
+
+    if (payload.aud !== googleClientId) {
+      return res.status(401).json({ message: 'Token audience mismatch. Access denied.' });
+    }
+
+    const email = payload.email;
+    if (!email) {
+      return res.status(400).json({ message: 'Email address not provided by Google' });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
 
     // Find or create user
-    let user = await User.findOne({ email: mockEmail });
+    let user = await User.findOne({ email: normalizedEmail });
     
     if (!user) {
       // Create a random password since OAuth users don't use standard passwords
-      const randomPassword = Math.random().toString(36).slice(-10);
+      const randomPassword = Math.random().toString(36).slice(-12);
       const hashedPassword = await bcrypt.hash(randomPassword, 10);
       
       user = new User({
-        email: mockEmail,
+        email: normalizedEmail,
         password: hashedPassword,
       });
       await user.save();
     }
 
     // Create JWT token
-    const token = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
+    const jwtToken = jwt.sign({ id: user._id, email: user.email }, JWT_SECRET, {
       expiresIn: '7d',
     });
 
     res.json({
-      token,
+      token: jwtToken,
       user: {
         id: user._id,
         email: user.email,
